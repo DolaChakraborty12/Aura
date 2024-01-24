@@ -49,13 +49,11 @@ public class doctor extends AppCompatActivity {
                 ArrayList<Model> doctorList = new ArrayList<>();
                 for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
                     Model doctor = snapshot.getValue(Model.class);
-                    System.out.println("Hello");
-                    System.out.println(doctor);
                     if (doctor != null) {
                         doctorList.add(doctor);
                     }
                 }
-                System.out.println(doctorList);
+                adapter.notifyDataSetChanged();
                 adapter.setData(doctorList);
             }
 

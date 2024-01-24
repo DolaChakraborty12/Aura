@@ -3,15 +3,12 @@ import com.google.firebase.database.IgnoreExtraProperties;
 
 @IgnoreExtraProperties
 public class Model {
-    private String imageName;
-    private String imageName1;
-    private String imageName2;
-    private String imageURL;
-
-    // Required no-argument constructor for Firebase
+    public String imageName;
+    public String imageName1;
+    public String imageName2;
+    public String imageURL;
     public Model() {
     }
-
     public Model(String imageName, String imageName1, String imageName2, String imageURL) {
         this.imageName = imageName;
         this.imageName1 = imageName1;

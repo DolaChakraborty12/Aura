@@ -11,11 +11,13 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.bumptech.glide.Glide;
+
 public class doctor2 extends AppCompatActivity
 {
     ImageView img;
     TextView tv1,tv2,tv3;
-    Button btnSendMessage,btnCall;
+    public Button btnSendMessage,btnCall;
     @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -27,8 +29,9 @@ public class doctor2 extends AppCompatActivity
         tv1=(TextView)findViewById(R.id.desc_header);
         tv2=(TextView)findViewById(R.id.desc_desc);
         tv3=(TextView)findViewById(R.id.desc_phn);
+        String imageUrl = getIntent().getStringExtra("imagename");
+        Glide.with(this).load(imageUrl).into(img);
 
-        img.setImageResource(getIntent().getIntExtra("imagename",0));
         tv1.setText(getIntent().getStringExtra("header"));
         tv2.setText(getIntent().getStringExtra("desc"));
         tv3.setText(getIntent().getStringExtra("phoneNumber"));

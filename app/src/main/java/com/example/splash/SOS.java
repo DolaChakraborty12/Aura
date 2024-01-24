@@ -1,18 +1,26 @@
 package com.example.splash;
 
+import static android.app.Service.START_STICKY;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.PowerManager;
 import android.provider.ContactsContract;
-import android.content.SharedPreferences;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -21,36 +29,48 @@ import android.widget.Toast;
 
 public class SOS extends AppCompatActivity {
 
-    TextView textView, textView2, textView3;  // References for the TextViews
-    ImageButton imageButton4, imageButton5, imageButton6;  // References for the ImageButtons
-    Button button, deleteButton;
+    // References for UI elements
+    TextView textView, textView2, textView3;
+    ImageButton imageButton4, imageButton5, imageButton6;
+    Button button, deleteButton,saveButton;
+    PowerManager.WakeLock wakeLock;
+    private final Handler handler = new Handler();
+    private static final long DELAY_BEFORE_NEXT_CALL = 5000; // Adjust the delay as needed
 
 
-    String[] cnumber = new String[3];  // Array to store the contact numbers for up to 3 contacts
+    // Array to store contact numbers
+    String[] cnumber = new String[3];
+
+    // Constants
     static final int PICK_CONTACT = 1;
+    public static final int POWER_BUTTON_CLICK_THRESHOLD = 3;
     private SharedPreferences sharedPreferences;
+    public int powerButtonClickCount = 0;
 
+    // onCreate method
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sos);
 
-        // Initialize TextViews and ImageButtons
+        // Initialize UI elements
         textView = findViewById(R.id.textView4);
-        textView2 = findViewById(R.id.textView5);
+        textView2 = findViewById(R.id.textView7);
         textView3 = findViewById(R.id.textView6);
-        sharedPreferences = getSharedPreferences("MyContacts", MODE_PRIVATE);
-
 
         imageButton4 = findViewById(R.id.imageButton4);
-        imageButton5 = findViewById(R.id.imageButton5);
+        imageButton5 = findViewById(R.id.imageButton9);
         imageButton6 = findViewById(R.id.imageButton6);
 
         button = findViewById(R.id.button2);
-        sharedPreferences = getSharedPreferences("MyContacts", MODE_PRIVATE);
-        Button saveButton = findViewById(R.id.saveButton);
-        Button dlt = findViewById(R.id.dltbtn);
+        deleteButton = findViewById(R.id.dltbtn);
+        saveButton = findViewById(R.id.saveButton);
 
+        // Initialize SharedPreferences
+        sharedPreferences = getSharedPreferences("MyContacts", MODE_PRIVATE);
+
+        // Request permissions
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -75,10 +95,13 @@ public class SOS extends AppCompatActivity {
         imageButton5.setOnClickListener(v -> makeCall(1));
         imageButton6.setOnClickListener(v -> makeCall(2));
         loadSavedContacts();
+        saveButton.setOnClickListener(v -> {
+            saveContactsToSharedPreferences();
+        });
 
-        // Clear the contact associated with textView6
 
-        dlt.setOnClickListener(new View.OnClickListener() {
+        // Set onClickListener for the deleteButton
+        deleteButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 textView.setOnClickListener(new View.OnClickListener() {
@@ -102,13 +125,32 @@ public class SOS extends AppCompatActivity {
             }
         });
 
-        saveButton.setOnClickListener(v -> {
-            saveContactsToSharedPreferences();
-        });
 
 
+        IntentFilter screenOnFilter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        registerReceiver(screenOnReceiver, screenOnFilter);
     }
 
+    // BroadcastReceiver to handle power button events
+    private BroadcastReceiver screenOnReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                // The screen is turned on
+                powerButtonClickCount++;
+
+                if (powerButtonClickCount == POWER_BUTTON_CLICK_THRESHOLD) {
+                    // Make a call when the power button is clicked three times
+                    makeCall(0); // Change the index according to your requirement
+
+                    powerButtonClickCount = 0; // Reset the count after making the call
+                }
+            }
+        }
+    };
+
+
+    // onActivityResult method
     @SuppressLint("Range")
     @Override
     public void onActivityResult(int reqCode, int resultCode, Intent data) {
@@ -119,23 +161,26 @@ public class SOS extends AppCompatActivity {
                     Uri contactData = data.getData();
                     Cursor c = getContentResolver().query(contactData, null, null, null, null);
                     if (c != null && c.moveToFirst()) {
-                        String id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID));
-                        String hasPhone = c.getString(c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER));
-                        if (hasPhone.equalsIgnoreCase("1")) {
-                            Cursor phones = getContentResolver().query(
-                                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
-                                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + id,
-                                    null, null);
-                            if (phones != null && phones.moveToFirst()) {
-                                String name = c.getString(c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME));
-                                int index = findNextEmptyIndex();
-                                if (index != -1) {
-                                    cnumber[index] = phones.getString(phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)).trim();
-                                    updateTextView(index, cnumber[index], name);
-                                } else {
-                                    Toast.makeText(this, "All slots are filled!Please delete contact", Toast.LENGTH_SHORT).show();
+                        int hasPhoneColumnIndex = c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER);
+                        if (hasPhoneColumnIndex >= 0) {
+                            String hasPhone = c.getString(hasPhoneColumnIndex);
+                            if (hasPhone != null && hasPhone.equalsIgnoreCase("1")) {
+                                String id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID));
+                                Cursor phones = getContentResolver().query(
+                                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
+                                        ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + id,
+                                        null, null);
+                                if (phones != null && phones.moveToFirst()) {
+                                    String name = c.getString(c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME));
+                                    int index = findNextEmptyIndex();
+                                    if (index != -1) {
+                                        cnumber[index] = phones.getString(phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)).trim();
+                                        updateTextView(index, cnumber[index], name);
+                                    } else {
+                                        Toast.makeText(this, "All slots are filled! Please delete a contact.", Toast.LENGTH_SHORT).show();
+                                    }
+                                    phones.close();
                                 }
-                                phones.close();
                             }
                         }
                         if (c != null) {
@@ -145,9 +190,10 @@ public class SOS extends AppCompatActivity {
                 }
                 break;
         }
+
     }
 
-    // Find the next empty index in cnumbers array
+    // findNextEmptyIndex method
     private int findNextEmptyIndex() {
         for (int i = 0; i < cnumber.length; i++) {
             if (cnumber[i] == null || cnumber[i].isEmpty()) {
@@ -157,7 +203,7 @@ public class SOS extends AppCompatActivity {
         return -1;  // Return -1 if all slots are filled
     }
 
-    // Update the appropriate TextView based on the index
+    // updateTextView method
     private void updateTextView(int index, String phoneNumber, String name) {
         switch (index) {
             case 0:
@@ -169,26 +215,43 @@ public class SOS extends AppCompatActivity {
             case 2:
                 textView3.setText(name + "\n" + phoneNumber);
                 break;
-            // Add more cases if you extend the number of pairs
         }
         saveContactToSharedPreferences(index, phoneNumber, name);
     }
 
+    // makeCall method
     private void makeCall(int index) {
-        String savedPhoneNumber = sharedPreferences.getString("phoneNumber" + index, ""); // Assuming you're using SharedPreferences to store phone numbers
-        // Check if the retrieved number is valid
+        String savedPhoneNumber = sharedPreferences.getString("phoneNumber" + index, "");
+
         if (savedPhoneNumber != null && !savedPhoneNumber.trim().isEmpty()) {
             Intent intent = new Intent(Intent.ACTION_CALL);
-            intent.setData(Uri.parse("tel:" + savedPhoneNumber.trim()));  // Ensure you trim the phone number
-            if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-                return;
+            intent.setData(Uri.parse("tel:" + savedPhoneNumber.trim()));
+
+            // Check if the call was already answered for this index
+            boolean callAnswered = sharedPreferences.getBoolean("callAnswered" + index, false);
+
+            if (!callAnswered) {
+                // Start the call
+                if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                    return;
+                }
+
+                startActivity(intent);
+
+                // Delay before attempting the next call
+                handler.postDelayed(() -> {
+                    int nextIndex = index + 2;
+                    if (nextIndex < cnumber.length) {
+                        makeCall(nextIndex);
+                    }
+                }, DELAY_BEFORE_NEXT_CALL);
             }
-            startActivity(intent);
         } else {
             Toast.makeText(this, "No valid number available.", Toast.LENGTH_SHORT).show();
         }
     }
 
+    // clearContact method
     private void clearContact(int index) {
         switch (index) {
             case 0:
@@ -204,7 +267,8 @@ public class SOS extends AppCompatActivity {
         cnumber[index] = "";  // Clear the corresponding phone number
     }
 
-    private void saveContactsToSharedPreferences() {
+    // saveContactsToSharedPreferences method
+    public void saveContactsToSharedPreferences() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
 
         for (int i = 0; i < cnumber.length; i++) {
@@ -216,9 +280,8 @@ public class SOS extends AppCompatActivity {
         Toast.makeText(SOS.this, "Saved successfully!", Toast.LENGTH_SHORT).show();
     }
 
-
-    private void saveContactToSharedPreferences(int index, String phoneNumber, String name) {
-
+    // saveContactToSharedPreferences method
+    public void saveContactToSharedPreferences(int index, String phoneNumber, String name) {
         if (sharedPreferences.getString("name" + index, "").isEmpty()
                 && sharedPreferences.getString("phoneNumber" + index, "").isEmpty()) {
 
@@ -229,9 +292,9 @@ public class SOS extends AppCompatActivity {
         }
     }
 
+    // loadSavedContacts method
     private void loadSavedContacts() {
-
-        for (int i = 0; i < 3; i++) {  // Assuming you have 3 contacts to load
+        for (int i = 0; i < 3; i++) {
             String name = sharedPreferences.getString("name" + i, "");
             String phoneNumber = sharedPreferences.getString("phoneNumber" + i, "");
 
@@ -240,4 +303,16 @@ public class SOS extends AppCompatActivity {
             }
         }
     }
+
+    // onDestroy method
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        unregisterReceiver(screenOnReceiver);
+        IntentFilter screenOnFilter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        registerReceiver(screenOnReceiver, screenOnFilter);
+
+    }
+
 }

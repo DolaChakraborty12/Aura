@@ -2,6 +2,7 @@ package com.example.splash;
 
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,8 +16,8 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 
 public class Myada extends RecyclerView.Adapter<myviewholder> {
-    private ArrayList<Model> data;
-    private Context context;
+    public ArrayList<Model> data;
+    public Context context;
 
     public Myada(ArrayList<Model> data, Context context) {
         this.data = data;
@@ -36,9 +37,11 @@ public class Myada extends RecyclerView.Adapter<myviewholder> {
         final Model temp = data.get(position);
 
         holder.t1.setText(data.get(position).getHeader());
+        holder.t2.setText(data.get(position).getDesc());
         Glide.with(context).load(data.get(position).getImgname()).into(holder.img);
 
-        holder.img.setOnClickListener(new View.OnClickListener() {
+
+        holder.t2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Intent intent = new Intent(context, doctor2.class);

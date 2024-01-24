@@ -95,7 +95,6 @@ public class adminpanel extends AppCompatActivity {
 
 
     public String GetFileExtension(Uri uri) {
-
         ContentResolver contentResolver = getContentResolver();
         MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
         return mimeTypeMap.getExtensionFromMimeType(contentResolver.getType(uri)) ;

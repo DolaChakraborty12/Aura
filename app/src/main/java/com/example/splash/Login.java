@@ -81,15 +81,11 @@ public class Login extends AppCompatActivity {
                     return;
                 }
                 if(phone.length()<11 || phone.length()>11)
-                {
-                    phn.setError("Invalid phone number.");
-                    return;
-                }
+                {   phn.setError("Invalid phone number.");
+                    return;}
                 if(TextUtils.isEmpty(password))
-                {
-                    pass.setError("Please fill the password field.");
-                    return;
-                }
+                {   pass.setError("Please fill the password field.");
+                    return;}
                 if(password.length()<8)
                 {
                     pass.setError("Password length must contain at least 8 characters");
@@ -101,19 +97,7 @@ public class Login extends AppCompatActivity {
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         if(task.isSuccessful()){
                             FirebaseUser fuser = fAuth.getCurrentUser();
-                            fuser.sendEmailVerification().addOnSuccessListener(new OnSuccessListener<Void>() {
-                                @Override
-                                public void onSuccess(Void unused) {
-                                    Toast.makeText(Login.this,"Registration Successful",Toast.LENGTH_SHORT).show();
 
-                                }
-                            }).addOnFailureListener(new OnFailureListener() {
-                                @Override
-                                public void onFailure(@NonNull Exception e) {
-                                    Log.d(TAG,"Onfailure: Email not sent " + e.getMessage());
-
-                                }
-                            });
                             Toast.makeText(Login.this,"Registration Successful",Toast.LENGTH_SHORT).show();
                             userId = fAuth.getCurrentUser().getUid();
                             DocumentReference documentReference = fstore.collection("user").document(userId);
